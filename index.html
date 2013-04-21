@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Distribution Network</title>
+    <meta name="author" content="pravin.v@gramener.com">
+    <meta name="description" content="network visualization mockup">
+    <!-- http://www.allenpike.com/2010/choosing-a-viewport-for-ipad-sites/ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- http://support.google.com/webmasters/bin/answer.py?hl=en&answer=79812 -->
+    <meta name="google" content="notranslate" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
+    <link href="css/bootstrap-responsive.min.css" rel="stylesheet" media="screen">
+    <style type="text/css">
+      circle {
+        fill-opacity: .75;
+        stroke-width: .5;
+        stroke: rgba(000.5);
+      }
+      line {
+        stroke: rgb(26, 22, 22);
+        stroke-opacity: .5;
+        stroke-width: .5;
+      }
+      body .nav-content {
+        margin-top: 10px;
+      }
+      svg {
+        outline: 1px solid rgba(0,0,0,.2);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container nav-content">
+      <div class="navbar navbar-inverse">
+        <div class="navbar-inner">
+          <div class="container">
+            <a class="brand" href="#" onclick="javascript:location.reload();">Distribution Network</a>
+            <button class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+            </button>
+            <div class="nav-collapse collapse">
+              <ul class="nav">
+                <li class="dropdown"><a href="#" class="dropdown-toggle" data-toggle="dropdown">Set Metrics <b class="caret"></b></a>
+                  <ul class="dropdown-menu">
+                    
+                    <!-- Set Circle Size -->
+                    <li class="dropdown-submenu">
+                      <a tabindex="-1" href="#">Circle Color </a>
+                      <ul class="dropdown-menu">
+                        <li><a class="metrics" tabindex="-1" href="#">Not Loaded Yet</a></li>
+                      </ul>
+                    </li>
+
+                    <!-- Set Circle Color -->
+                    <li class="dropdown-submenu">
+                      <a tabindex="-1" href="#">Circle Size </a>
+                      <ul class="dropdown-menu">
+                        <li><a class="metrics" tabindex="-1" href="#">Not Loaded Yet</a></li>
+                      </ul>
+                    </li>
+
+                    <!-- Set Link Distance -->
+                    <li class="dropdown-submenu">
+                      <a tabindex="-1" href="#">Link Distance </a>
+                      <ul class="dropdown-menu">
+                        <li><a class="metrics" tabindex="-1" href="#">Not Loaded Yet</a></li>
+                      </ul>
+                    </li>
+                  
+                  </ul>
+                </li>              
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container">
+      <svg width="1170" height="550"></svg>
+    </div>
+    <script src="js/d3.v3.min.js"></script>
+    <script src="js/jquery.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/underscore.min.js"></script>
+    <script type="text/javascript">
+      jQuery('*').click(function(e){
+        e.preventDefault();
+      });
+      jQuery('.metrics').click(function(e){ 
+        jQuery(e.target)
+          .parents(".dropdown-submenu")
+          .find('a').first()
+          .append('<span class="label label-info">'+jQuery(this).text()+'</span>');
+      });
+
+      var w   = 1170,
+          h   = 550,
+          svg = d3.select("svg");
+
+      loadFile('data.csv');
+
+      function loadFile (file)
+      {
+        d3.csv(file, function (rows) {
+          reDraw(rows);
+        });
+      }
+
+      function reDraw (rows) {
+        var nodes = [];
+        var links = [];
+
+        _.each(rows, function (row) {
+          nodes.push(+row.vertex_a, +row.vertex_b);
+        });
+
+        nodes = _.map(_.uniq(nodes), function (n) {
+          return { name:n, group:n };
+        })
+
+        _.each(rows, function (row) {
+          links.push({
+            source: _.find(nodes, function(n){ return n.name == +row.vertex_a; }), 
+            target: _.find(nodes, function(n){ return n.name == +row.vertex_b; })
+          });
+        });
+
+        var force = d3.layout.force()
+          .nodes(nodes)
+          .links(links)
+          .charge(-200)
+          .size([w, h])
+          .start();
+
+        var link = svg.selectAll(".link")
+            .data(links)
+          .enter().append("line")
+
+        var node = svg.selectAll("circle")
+            .data(nodes)
+          .enter().append("circle")
+            .attr('r', 5)
+            .call(force.drag);
+
+        force.on('tick', function() {
+          link
+            .attr("x1", function(d) { return d.source.x; })
+            .attr("y1", function(d) { return d.source.y; })
+            .attr("x2", function(d) { return d.target.x; })
+            .attr("y2", function(d) { return d.target.y; });
+
+          node
+            .attr("transform", function(d) {
+              return "translate(" + d.x + "," + d.y + ")";
+            });
+        })
+      }
+      
+
+    </script>
+  </body>
+</html>
