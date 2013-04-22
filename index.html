@@ -45,31 +45,31 @@
               <ul class="nav">
                 <li class="dropdown"><a href="#" class="dropdown-toggle" data-toggle="dropdown">Set Metrics <b class="caret"></b></a>
                   <ul class="dropdown-menu">
-                    
+
                     <!-- Set Circle Size -->
                     <li class="dropdown-submenu">
-                      <a tabindex="-1" href="#">Circle Color </a>
-                      <ul class="dropdown-menu">
-                        <li><a class="metrics" tabindex="-1" href="#">Not Loaded Yet</a></li>
+                      <a class="0" tabindex="-1" href="#">Circle Color </a>
+                      <ul class="dropdown-menu snodes">
+                        <li><a tabindex="-1" href="#">Not Loaded Yet</a></li>
                       </ul>
                     </li>
 
                     <!-- Set Circle Color -->
                     <li class="dropdown-submenu">
-                      <a tabindex="-1" href="#">Circle Size </a>
-                      <ul class="dropdown-menu">
-                        <li><a class="metrics" tabindex="-1" href="#">Not Loaded Yet</a></li>
+                      <a class="1" tabindex="-1" href="#">Circle Size </a>
+                      <ul class="dropdown-menu snodes">
+                        <li><a tabindex="-1" href="#">Not Loaded Yet</a></li>
                       </ul>
                     </li>
 
                     <!-- Set Link Distance -->
                     <li class="dropdown-submenu">
-                      <a tabindex="-1" href="#">Link Distance </a>
-                      <ul class="dropdown-menu">
-                        <li><a class="metrics" tabindex="-1" href="#">Not Loaded Yet</a></li>
+                      <a class="2" tabindex="-1" href="#">Link Distance </a>
+                      <ul class="dropdown-menu sedges">
+                        <li><a tabindex="-1" href="#">Not Loaded Yet</a></li>
                       </ul>
                     </li>
-                  
+
                   </ul>
                 </li>              
               </ul>
@@ -89,37 +89,72 @@
       jQuery('*').click(function(e){
         e.preventDefault();
       });
-      jQuery('.metrics').click(function(e){ 
-        jQuery(e.target)
-          .parents(".dropdown-submenu")
-          .find('a').first()
-          .append('<span class="label label-info">'+jQuery(this).text()+'</span>');
-      });
+
+      var nodes = [];
+      var links = [];
+      var node;
+      var link;
+      var force;
 
       var w   = 1170,
           h   = 550,
           svg = d3.select("svg");
 
-      loadFile('data.csv');
+      loadFile('data.csv', 'nodes.csv');
 
-      function loadFile (file)
+      function loadFile (edgesFile, nodesFile)
       {
-        d3.csv(file, function (rows) {
-          reDraw(rows);
+        d3.csv(edgesFile, function (rows) {
+          d3.csv(nodesFile, function(nodes) {
+
+            var edges_columns = d3.entries(rows[0]).slice(3).map(function(d){
+              return d.key;
+            });
+
+            var nodes_columns = d3.entries(nodes[0]).slice(1).map(function(d){
+              return d.key;
+            });
+
+            d3.selectAll('.sedges').selectAll('*').remove();
+            var li = d3.selectAll('.sedges').append('li');
+            li.selectAll('a')
+              .data(edges_columns)
+              .enter().append('a')
+                .attr('tabindex', '-1')
+                .attr('href', '#')
+                .text(function(d){ return d; })
+                .on('click', function(e,i){ 
+                  updateThis(jQuery(this)
+                              .parents('.dropdown-submenu')
+                              .children(':first')
+                              .attr('class'), nodes, e, rows);
+                });
+
+            d3.selectAll('.snodes').selectAll('*').remove();
+            var li = d3.selectAll('.snodes').append('li');
+            li.selectAll('a')
+              .data(nodes_columns)
+              .enter().append('a')
+                .attr('tabindex', '-1')
+                .attr('href', '#')
+                .text(function(d){ return d; })
+                .on('click', function(e,i){ 
+                  updateThis(jQuery(this)
+                              .parents('.dropdown-submenu')
+                              .children(':first')
+                              .attr('class'), nodes, e, rows);
+                });
+
+            reDraw(rows, nodes);
+          });
         });
       }
 
-      function reDraw (rows) {
-        var nodes = [];
-        var links = [];
-
-        _.each(rows, function (row) {
-          nodes.push(+row.vertex_a, +row.vertex_b);
+      function reDraw (rows, nodes) {
+        
+        nodes = _.map(nodes, function (n) {
+          return { name:n.node, group:n.node };
         });
-
-        nodes = _.map(_.uniq(nodes), function (n) {
-          return { name:n, group:n };
-        })
 
         _.each(rows, function (row) {
           links.push({
@@ -128,20 +163,21 @@
           });
         });
 
-        var force = d3.layout.force()
+        force = d3.layout.force()
           .nodes(nodes)
           .links(links)
           .charge(-200)
           .size([w, h])
           .start();
 
-        var link = svg.selectAll(".link")
+        var link = svg.selectAll("line")
             .data(links)
           .enter().append("line")
 
         var node = svg.selectAll("circle")
             .data(nodes)
           .enter().append("circle")
+            .attr('class', function(d){ return d.name; })
             .attr('r', 5)
             .call(force.drag);
 
@@ -158,7 +194,42 @@
             });
         })
       }
+
       
+
+      function updateThis (e, elements, d, rows) {
+
+        var maxR = _.map(elements, function(e) {
+          return +e[d];
+        });
+
+        var radReScale = d3.scale.linear().range([5,15]).domain([1,_.max(maxR)]);
+        var color      = d3.scale.linear().domain([0,_.max(maxR)]).range(["yellow","red"]);
+
+        if (e == 0)
+        {
+          _.each(elements, function(n) {
+            d3.select('circle[class="'+n.node+'"]')
+              .transition()
+              .attr('fill', color(+n[d]))
+          });
+        }
+        else if (e == 1)
+        {
+          _.each(elements, function(n) {
+            d3.select('circle[class="'+n.node+'"]')
+              .transition()
+              .attr('r', radReScale(+n[d]))
+          });
+        }
+        else if (e == 2)
+        {
+          force
+            .linkDistance(function(ld) {
+              return +_.find(rows, function(r){ return r.vertex_a == ld.source.name && r.vertex_b == ld.target.name; })[d];
+            }).start();
+        }
+      }
 
     </script>
   </body>
