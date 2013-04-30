@@ -82,6 +82,7 @@
       <svg width="1170" height="550"></svg>
     </div>
     <script src="js/d3.v3.min.js"></script>
+    <script src="js/queue.v1.0.4.min.js"></script>
     <script src="js/jquery.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <script src="js/underscore.min.js"></script>
@@ -98,73 +99,88 @@
 
       var w   = 1170,
           h   = 550,
-          svg = d3.select("svg");
+          svg = d3.select('svg');
 
-      loadFile('data.csv', 'nodes.csv');
+      queue()
+          .defer(d3.csv, 'nodes.csv')
+          .defer(d3.csv, 'data.csv')
+          .awaitAll(loadFile)
 
-      function loadFile (edgesFile, nodesFile)
+      function loadFile (error, data)
       {
-        d3.csv(edgesFile, function (rows) {
-          d3.csv(nodesFile, function(nodes) {
+        /*
+          Understanding about arguments to the current function --> https://github.com/mbostock/queue#queueawaitallcallback
+         */
 
-            var edges_columns = d3.entries(rows[0]).slice(3).map(function(d){
-              return d.key;
-            });
+        var nodes  = data[0];
+        var edges  = data[1];
 
-            var nodes_columns = d3.entries(nodes[0]).slice(1).map(function(d){
-              return d.key;
-            });
+        /*
+          This portion of script for adding cols to dropdown menu assumes that some cols can be avoided and hence slice().
+        */
 
-            d3.selectAll('.sedges').selectAll('*').remove();
-            var li = d3.selectAll('.sedges').append('li');
-            li.selectAll('a')
-              .data(edges_columns)
-              .enter().append('a')
-                .attr('tabindex', '-1')
-                .attr('href', '#')
-                .text(function(d){ return d; })
-                .on('click', function(e,i){ 
-                  updateThis(jQuery(this)
-                              .parents('.dropdown-submenu')
-                              .children(':first')
-                              .attr('class'), nodes, e, rows);
-                });
-
-            d3.selectAll('.snodes').selectAll('*').remove();
-            var li = d3.selectAll('.snodes').append('li');
-            li.selectAll('a')
-              .data(nodes_columns)
-              .enter().append('a')
-                .attr('tabindex', '-1')
-                .attr('href', '#')
-                .text(function(d){ return d; })
-                .on('click', function(e,i){ 
-                  updateThis(jQuery(this)
-                              .parents('.dropdown-submenu')
-                              .children(':first')
-                              .attr('class'), nodes, e, rows);
-                });
-
-            reDraw(rows, nodes);
-          });
+        var ecol_names = d3.entries(edges[0]).slice(3).map(function(d){
+          return d.key;
         });
+
+        var ncol_names = d3.entries(nodes[0]).slice(1).map(function(d){
+          return d.key;
+        });
+
+        d3.selectAll('.sedges').selectAll('*').remove();
+        var li = d3.selectAll('.sedges').append('li');
+
+        li.selectAll('a')
+          .data(ecol_names)
+          .enter().append('a')
+            .attr('tabindex', '-1')
+            .attr('href', '#')
+            .text(function(d){ return d; })
+            .on('click', function(e,i){ 
+              updateThis(jQuery(this)
+                          .parents('.dropdown-submenu')
+                          .children(':first')
+                          .attr('class'), nodes, e, edges);
+            });
+
+        d3.selectAll('.snodes').selectAll('*').remove();
+        var li = d3.selectAll('.snodes').append('li');
+
+        li.selectAll('a')
+          .data(ncol_names)
+          .enter().append('a')
+            .attr('tabindex', '-1')
+            .attr('href', '#')
+            .text(function(d){ return d; })
+            .on('click', function(e,i){ 
+              updateThis(jQuery(this)
+                          .parents('.dropdown-submenu')
+                          .children(':first')
+                          .attr('class'), nodes, e, edges);
+            });
+
+        reDraw(edges, nodes);
       }
 
       function reDraw (rows, nodes) {
-        
-        nodes = _.map(nodes, function (n) {
-          return { name:n.node, group:n.node };
+
+        var modnodes = {};
+
+        _.each(nodes, function (n) {
+          modnodes[+n.node] = { name:+n.node, group:+n.node };
         });
 
         _.each(rows, function (row) {
           links.push({
-            source: _.find(nodes, function(n){ return n.name == +row.vertex_a; }), 
-            target: _.find(nodes, function(n){ return n.name == +row.vertex_b; })
+            source: modnodes[+row.vertex_a],
+            target: modnodes[+row.vertex_b]
           });
         });
 
+        modnodes = d3.values(modnodes)
+
         force = d3.layout.force()
-          .nodes(nodes)
+          .nodes(modnodes)
           .links(links)
           .charge(-200)
           .size([w, h])
@@ -175,7 +191,7 @@
           .enter().append("line")
 
         var node = svg.selectAll("circle")
-            .data(nodes)
+            .data(modnodes)
           .enter().append("circle")
             .attr('class', function(d){ return d.name; })
             .attr('r', 5)
